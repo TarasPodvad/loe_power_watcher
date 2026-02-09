@@ -65,6 +65,121 @@ The script will:
 - compare it with the previous state
 - send a Telegram alert only if needed
 
+## Run automatically on macOS (launchd)
+
+This app can be run as a background service on macOS using **launchd**.
+It will execute the script on a fixed interval and restart automatically.
+
+### 1. Project location
+
+Assume the project lives at:
+
+/ABS/PATH/TO/loe-watcher-v2
+
+Replace this path everywhere below with your actual absolute path.
+
+---
+
+### 2. Create a virtual environment (recommended)
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+### 3. Create a launchd plist
+
+Create the file:
+
+~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
+
+With the following content:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>Label</key>
+    <string>com.taras.loe-watcher-v2</string>
+
+    <key>ProgramArguments</key>
+    <array>
+      <string>/ABS/PATH/TO/loe-watcher-v2/.venv/bin/python</string>
+      <string>/ABS/PATH/TO/loe-watcher-v2/main.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>/ABS/PATH/TO/loe-watcher-v2</string>
+
+    <!-- Run every 60 seconds -->
+    <key>StartInterval</key>
+    <integer>60</integer>
+
+    <!-- Run once immediately after load/login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>/ABS/PATH/TO/loe-watcher-v2/logs/loe-watcher.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/ABS/PATH/TO/loe-watcher-v2/logs/loe-watcher.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+      <key>PATH</key>
+      <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+  </dict>
+</plist>
+```
+
+Make sure the `logs/` directory exists:
+
+```bash
+mkdir -p logs
+```
+
+---
+
+### 4. Load and start the service
+
+```bash
+launchctl load -w ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
+launchctl kickstart -k gui/$(id -u)/com.taras.loe-watcher-v2
+```
+
+---
+
+### 5. Stop (unload) the service
+
+```bash
+launchctl unload -w ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
+```
+
+---
+
+### 6. Remove the service completely
+
+```bash
+launchctl unload -w ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
+rm ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
+```
+
+---
+
+### Notes
+
+- The service runs under the **current user session**
+- Logs are written to the `logs/` directory
+- Configuration should be provided via environment variables (`.env`)
+- After changing code or config, reload the service
+
+
 ---
 
 ## State & persistence
