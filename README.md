@@ -50,7 +50,7 @@ pip install -r requirements.txt
 Create a .env file in the project root:
 
 TELEGRAM_BOT_TOKEN=your_bot_token  
-TELEGRAM_CHAT_IDS=[id1,id2] #i.e. [123456789,987654321]
+TELEGRAM_CHAT_IDS=[id1,id2] #i.e. [123456789,234567890]
 
 .env is intentionally not committed to GitHub.
 
