@@ -93,8 +93,9 @@ pip install -r requirements.txt
 ### 3. Create a launchd plist
 
 Create the file:
+using terminal: 
+nano ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
 
-~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
 
 With the following content:
 
@@ -115,9 +116,15 @@ With the following content:
     <key>WorkingDirectory</key>
     <string>/ABS/PATH/TO/loe-watcher-v2</string>
 
-    <!-- Run every 60 seconds -->
-    <key>StartInterval</key>
-    <integer>60</integer>
+    <key>StartCalendarInterval</key>
+      <array>
+        <dict><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Minute</key><integer>10</integer></dict>
+        <dict><key>Minute</key><integer>20</integer></dict>
+        <dict><key>Minute</key><integer>30</integer></dict>
+        <dict><key>Minute</key><integer>40</integer></dict>
+        <dict><key>Minute</key><integer>50</integer></dict>
+      </array>
 
     <!-- Run once immediately after load/login -->
     <key>RunAtLoad</key>
