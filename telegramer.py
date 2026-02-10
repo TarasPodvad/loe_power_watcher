@@ -3,7 +3,7 @@ from datetime import datetime
 from config import BOT_TOKEN, CHAT_IDS
 
 def send_telegram(msg=None, photo_path=None):
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
 
     try:
         if photo_path:
@@ -24,6 +24,6 @@ def send_telegram(msg=None, photo_path=None):
                     data={"chat_id": chat_id, "text": msg or ""},
                     timeout=15
                 )
-        print(now, msg)
+        print(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}:         ", msg)
     except requests.exceptions.RequestException as e:
-        print(now, "Telegram error:", e)
+        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Telegram error:", e)

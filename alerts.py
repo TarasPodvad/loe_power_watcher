@@ -1,6 +1,8 @@
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, time
 from telegramer import send_telegram
 from sent_alerts import was_sent, mark_sent
+import re
+
 
 def _dt_from_minutes(d: date, minutes: int) -> datetime:
     return datetime.combine(d, datetime.min.time()) + timedelta(minutes=minutes)
@@ -78,3 +80,27 @@ def _maybe_send_event(kind, event_dt, until_dt, now, template):
 
         send_telegram(msg)
         mark_sent(event_id)
+
+def _to_minutes(t: str) -> int:
+    h, m = map(int, t.split(":"))
+    if h == 24:
+        return 24 * 60
+    return h * 60 + m
+
+
+def parse_ranges(line: str):
+    line = (line or "").strip()
+    if not line:
+        return []
+
+    matches = re.findall(
+        r"з\s*(\d{1,2}:\d{2})\s*до\s*(\d{1,2}:\d{2})",
+        line,
+        flags=re.IGNORECASE
+    )
+
+    ranges = []
+    for start_str, end_str in matches:
+        ranges.append((_to_minutes(start_str), _to_minutes(end_str)))
+
+    return ranges
