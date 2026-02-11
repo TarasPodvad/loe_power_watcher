@@ -2,6 +2,8 @@
 .env
 .env.*
 
+data/
+
 # Runtime state
 state.txt
 sent_alerts.json
