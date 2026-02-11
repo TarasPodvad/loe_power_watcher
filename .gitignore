@@ -5,6 +5,8 @@
 # Runtime state
 state.txt
 sent_alerts.json
+schedule.png
+
 
 # Python
 __pycache__/
