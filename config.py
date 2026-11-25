@@ -1,18 +1,27 @@
-from dotenv import load_dotenv
 import os
+import tempfile
+from datetime import datetime
 from pathlib import Path
-import json
-from pathlib import Path
+from zoneinfo import ZoneInfo
 
-load_dotenv()
-
-URL = os.getenv("URL")
+API_URL = os.getenv(
+    "API_URL",
+    "https://api.loe.lviv.ua/api/menus?page=1&type=photo-grafic&jsonld=1",
+)
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_IDS = os.getenv("CHAT_IDS").split(",")
-GROUP_NAME = os.getenv("GROUP_NAME")
+CHAT_IDS = [c.strip() for c in os.getenv("CHAT_IDS", "").split(",") if c.strip()]
+GROUP_NAME = os.getenv("GROUP_NAME", "Група 5.1.")
+DRY_RUN = os.getenv("DRY_RUN") == "1"  # print instead of sending to Telegram
+
+TZ = ZoneInfo("Europe/Kyiv")
 
 BASE_DIR = Path(__file__).parent
-STATE_FILE = BASE_DIR / "data" / "state.txt"
-PLOT_FILE = BASE_DIR / "data" / "schedule.png"
+# app folder is read-only in Azure -> use temp dir there (state itself lives in Blob)
+DATA_DIR = Path(tempfile.gettempdir()) / "loe" if os.getenv("WEBSITE_INSTANCE_ID") else BASE_DIR / "data"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+PLOT_FILE = DATA_DIR / "schedule.png"
 
-SENT_ALERTS_FILE = BASE_DIR / "data" / "sent_alerts.json"
+
+def now() -> datetime:
+    """Current Kyiv time as a naive datetime (schedule times are Kyiv-local)."""
+    return datetime.now(TZ).replace(tzinfo=None)

@@ -1,5 +1,6 @@
-beautifulsoup4
+azure-functions
+azure-storage-blob
+azure-storage-queue
 requests
-selenium
 matplotlib
-python-dotenv
+tzdata

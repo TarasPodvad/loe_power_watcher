@@ -1,106 +1,84 @@
-from datetime import datetime, timedelta, date, time
-from telegramer import send_telegram
-from sent_alerts import was_sent, mark_sent
 import re
+from datetime import datetime, timedelta
 
+from config import now as kyiv_now
 
-def _dt_from_minutes(d: date, minutes: int) -> datetime:
-    return datetime.combine(d, datetime.min.time()) + timedelta(minutes=minutes)
+ALERT_WINDOW_MIN = 10
 
-def _fmt_hhmm(dt: datetime) -> str:
-    return dt.strftime("%H:%M")
-
-def send_alerts_10min_window(time_ranges, schedule_date: date):
-    """
-    Runs every ~10 minutes.
-    Sends a single message if an event happens within the next 10 minutes.
-    Message includes how long the upcoming state will last (until ...).
-    """
-    now = datetime.now()
-
-    # Build concrete outage intervals (off_dt -> on_dt)
-    intervals = []
-    for start_min, end_min in time_ranges:
-        crosses_midnight = end_min < start_min
-        off_dt = _dt_from_minutes(schedule_date, start_min)
-        on_dt = _dt_from_minutes(schedule_date + timedelta(days=1), end_min) if crosses_midnight else _dt_from_minutes(schedule_date, end_min)
-        intervals.append((off_dt, on_dt))
-
-    # Sort just in case
-    intervals.sort(key=lambda x: x[0])
-
-    for i, (off_dt, on_dt) in enumerate(intervals):
-        # OFF event -> "no electricity in N minutes until HH:MM"
-        _maybe_send_event(
-            kind="OFF",
-            event_dt=off_dt,
-            until_dt=on_dt,
-            now=now,
-            template=lambda mins, until: f"⚠️ Світла не буде через {mins} хв. до {until}"
-        )
-
-        # ON event -> "electricity on in N minutes until next outage start (if exists)"
-        next_off_dt = intervals[i + 1][0] if i + 1 < len(intervals) else None
-
-        if next_off_dt:
-            _maybe_send_event(
-                kind="ON",
-                event_dt=on_dt,
-                until_dt=next_off_dt,
-                now=now,
-                template=lambda mins, until: f"✅ Світло буде через {mins} хв. до {until}"
-            )
-        else:
-            # no next outage known -> message without "until"
-            _maybe_send_event(
-                kind="ON",
-                event_dt=on_dt,
-                until_dt=None,
-                now=now,
-                template=lambda mins, until: f"✅ Світло буде через {mins} хв."
-            )
-
-def _maybe_send_event(kind, event_dt, until_dt, now, template):
-    diff_sec = (event_dt - now).total_seconds()
-    if diff_sec <= 0:
-        return
-
-    # ceil minutes remaining
-    diff_min = int((diff_sec + 59) // 60)
-
-    if diff_min <= 10:
-        event_id = f"{event_dt.date().isoformat()}_{kind}_{event_dt.strftime('%H:%M')}"
-        if was_sent(event_id):
-            return
-
-        if until_dt is not None:
-            msg = template(diff_min, until_dt.strftime("%H:%M"))
-        else:
-            msg = template(diff_min, None)
-
-        send_telegram(msg)
-        mark_sent(event_id)
 
 def _to_minutes(t: str) -> int:
     h, m = map(int, t.split(":"))
-    if h == 24:
-        return 24 * 60
-    return h * 60 + m
+    return h * 60 + m  # "24:00" -> 1440
 
 
 def parse_ranges(line: str):
-    line = (line or "").strip()
-    if not line:
-        return []
+    matches = re.findall(r"з\s*(\d{1,2}:\d{2})\s*до\s*(\d{1,2}:\d{2})", line or "", flags=re.IGNORECASE)
+    return [(_to_minutes(s), _to_minutes(e)) for s, e in matches]
 
-    matches = re.findall(
-        r"з\s*(\d{1,2}:\d{2})\s*до\s*(\d{1,2}:\d{2})",
-        line,
-        flags=re.IGNORECASE
-    )
 
-    ranges = []
-    for start_str, end_str in matches:
-        ranges.append((_to_minutes(start_str), _to_minutes(end_str)))
+def _intervals(schedule):
+    """All outage intervals across all dates, as datetimes, with touching ones merged."""
+    out = []
+    for d, line in schedule:
+        base = datetime.combine(d, datetime.min.time())
+        for start, end in parse_ranges(line):
+            off = base + timedelta(minutes=start)
+            on = base + timedelta(minutes=end if end >= start else end + 24 * 60)
+            out.append([off, on])
+    out.sort()
+    merged = []
+    for off, on in out:
+        if merged and off <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], on)
+        else:
+            merged.append([off, on])
+    return merged
 
-    return ranges
+
+def plan_alerts(schedule, lead_min: int = ALERT_WINDOW_MIN):
+    """For queue-based delivery: [(send_at, event_id, text)] for every future event.
+
+    send_at = event - lead_min; if that moment already passed but the event is still
+    ahead, send_at = now and the text uses the real minutes left.
+    """
+    now = kyiv_now()
+    intervals = _intervals(schedule)
+    plan = []
+    for i, (off_dt, on_dt) in enumerate(intervals):
+        nxt = intervals[i + 1][0] if i + 1 < len(intervals) else None
+        events = [
+            ("OFF", off_dt, "⚠️ Світла не буде через {mins} хв. до " + f"{on_dt:%H:%M}"),
+            ("ON", on_dt, "✅ Світло буде через {mins} хв." + (f" до {nxt:%H:%M}" if nxt else "")),
+        ]
+        for kind, event_dt, tmpl in events:
+            if event_dt <= now:
+                continue
+            send_at = max(event_dt - timedelta(minutes=lead_min), now)
+            mins = int(((event_dt - send_at).total_seconds() + 59) // 60)
+            plan.append((send_at, f"{event_dt:%Y-%m-%d}_{kind}_{event_dt:%H:%M}", tmpl.format(mins=mins)))
+    return plan
+
+
+def describe_change(old_text: str, new_text: str) -> str:
+    """Human-readable diff of the group's lines, keyed by date. Past dates are ignored,
+    so yesterday dropping off the site at midnight is not reported as a change."""
+    today = kyiv_now().date()
+
+    def by_date(t):
+        rows = dict(l.split(": ", 1) for l in (t or "").splitlines() if ": " in l)
+        return {d: v for d, v in rows.items() if datetime.strptime(d, "%d.%m.%Y").date() >= today}
+
+    old, new = by_date(old_text), by_date(new_text)
+    out = []
+    for d in sorted(set(old) | set(new), key=lambda s: s[6:] + s[3:5] + s[:2]):
+        o, n = old.get(d), new.get(d)
+        if o == n:
+            continue
+        short = lambda s: s.split(". ", 1)[-1] if s else "—"
+        if o is None:
+            out.append(f"🆕 {d}: {short(n)}")
+        elif n is None:
+            out.append(f"🗑 {d}: графік знято")
+        else:
+            out.append(f"🔄 {d}: {short(o)} → {short(n)}")
+    return "\n".join(out)

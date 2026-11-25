@@ -1,0 +1,9 @@
+.git*
+.venv
+venv
+data
+logs
+__pycache__
+local.settings.json
+*.example
+README.md

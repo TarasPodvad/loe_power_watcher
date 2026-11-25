@@ -4,220 +4,77 @@ A small Python service that monitors power availability on
 https://poweron.loe.lviv.ua and sends Telegram alerts when the power
 goes off or comes back.
 
-Designed to run continuously (locally, cron, or cloud) and notify only
-when something actually changes.
+Runs in Azure Functions and notifies only when your group's schedule changes.
 
 ---
 
 ## What it does
 
-- Scrapes power status from the LOE website
-- Detects power off / power on transitions
-- Sends Telegram notifications
-- Avoids duplicate alerts using local state
-- Can generate simple plots of power history
+- Reads the schedule from the LOE JSON API (`api.loe.lviv.ua`, the same source the website uses; no browser)
+- Tracks **only your group** (`GROUP_NAME`), ignores changes in other groups
+- On a change, sends a chart + a readable diff, e.g. `🔄 25.11.2026: Електроенергія є. → Електроенергії немає з 13:00 до 16:30.`
+- Sends "⚠️ Світла не буде через 10 хв." / "✅ Світло буде через 10 хв." at the exact time
+  (alerts are queued with a delay; if the schedule changes, old alerts are dropped)
+
+## How it runs (Azure Functions, Flex Consumption)
+
+| Function | Trigger | Does |
+|---|---|---|
+| `check_schedule` | timer, every 5 min | fetch API → diff vs last state (Blob) → notify → queue alerts |
+| `send_alert` | Storage Queue `loe-alerts` | fires at alert time, skips if schedule changed since |
+
+State lives in Blob container `loe-state` (`schedule.txt`, `version.txt`).
 
 ---
 
 ## Project structure
 
 .
-├── main.py            # Entry point
-├── scraper.py         # Fetches & parses power status
-├── alerts.py          # Alert decision logic
-├── telegramer.py      # Telegram message sender
-├── state.py           # Runtime state handling
-├── sent_alerts.py     # Prevents duplicate notifications
-├── plotter.py         # Power history plotting
-├── config.py          # App configuration
-├── requirements.txt   # Python dependencies
+├── function_app.py    # Azure Functions entry (timer + queue)
+├── watcher.py         # Core: fetch → diff → notify → plan alerts
+├── scraper.py         # LOE API client, keeps only GROUP_NAME lines
+├── alerts.py          # Parse ranges, plan alerts, describe changes
+├── telegramer.py      # Telegram sender (DRY_RUN supported)
+├── plotter.py         # Schedule chart
+├── storage.py         # State in Azure Blob
+├── config.py          # Settings, Kyiv time
+├── deploy.sh          # One-time Azure setup + deploy
 
 ---
 
 ## Requirements
 
-- Python 3.10+
-- pip
-
-Install dependencies:
-
-pip install -r requirements.txt
-
----
+- Azure subscription
+- Azure CLI (`az`) and Azure Functions Core Tools (`func`)
 
 ## Configuration
 
-Create a .env file in the project root:
+Function App settings (set by `deploy.sh`, never committed):
 
-TELEGRAM_BOT_TOKEN=your_bot_token  
-TELEGRAM_CHAT_IDS=[id1,id2] #i.e. [123456789,234567890]
+| Setting | Example |
+|---|---|
+| `BOT_TOKEN` | Telegram bot token |
+| `CHAT_IDS` | `123456789,234567890` — every chat gets every message |
+| `GROUP_NAME` | `Група 5.1.` |
+| `DRY_RUN` | `1` = log messages instead of sending (optional) |
 
-.env is intentionally not committed to GitHub.
+Times are always Europe/Kyiv.
 
----
-
-## Run locally
-
-python main.py
-
-The script will:
-- check current power status
-- compare it with the previous state
-- send a Telegram alert only if needed
-
-## Run automatically on macOS (launchd)
-
-This app can be run as a background service on macOS using **launchd**.
-It will execute the script on a fixed interval and restart automatically.
-
-### 1. Project location
-
-Assume the project lives at:
-
-/ABS/PATH/TO/loe-watcher-v2
-
-Replace this path everywhere below with your actual absolute path.
-
----
-
-### 2. Create a virtual environment (recommended)
+## Deploy
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+az login
+export BOT_TOKEN=... CHAT_IDS=123,456
+./deploy.sh                            # one-time: RG, storage, Flex Consumption app, deploy
+func azure functionapp publish <APP>   # later code updates
 ```
-
----
-
-### 3. Create a launchd plist
-
-Create the file:
-using terminal: 
-nano ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
-
-
-With the following content:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-  <dict>
-    <key>Label</key>
-    <string>com.taras.loe-watcher-v2</string>
-
-    <key>ProgramArguments</key>
-    <array>
-      <string>/ABS/PATH/TO/loe-watcher-v2/.venv/bin/python</string>
-      <string>/ABS/PATH/TO/loe-watcher-v2/main.py</string>
-    </array>
-
-    <key>WorkingDirectory</key>
-    <string>/ABS/PATH/TO/loe-watcher-v2</string>
-
-    <key>StartCalendarInterval</key>
-      <array>
-        <dict><key>Minute</key><integer>0</integer></dict>
-        <dict><key>Minute</key><integer>10</integer></dict>
-        <dict><key>Minute</key><integer>20</integer></dict>
-        <dict><key>Minute</key><integer>30</integer></dict>
-        <dict><key>Minute</key><integer>40</integer></dict>
-        <dict><key>Minute</key><integer>50</integer></dict>
-      </array>
-
-    <!-- Run once immediately after load/login -->
-    <key>RunAtLoad</key>
-    <true/>
-
-    <key>StandardOutPath</key>
-    <string>/ABS/PATH/TO/loe-watcher-v2/logs/loe-watcher.out.log</string>
-
-    <key>StandardErrorPath</key>
-    <string>/ABS/PATH/TO/loe-watcher-v2/logs/loe-watcher.err.log</string>
-
-    <key>EnvironmentVariables</key>
-    <dict>
-      <key>PATH</key>
-      <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
-    </dict>
-  </dict>
-</plist>
-```
-
-Make sure the `logs/` directory exists:
-
-```bash
-mkdir -p logs
-```
-
----
-
-### 4. Load and start the service
-
-```bash
-launchctl load -w ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
-launchctl kickstart -k gui/$(id -u)/com.taras.loe-watcher-v2
-```
-
----
-
-### 5. Stop (unload) the service
-
-```bash
-launchctl unload -w ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
-```
-
----
-
-### 6. Remove the service completely
-
-```bash
-launchctl unload -w ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
-rm ~/Library/LaunchAgents/com.taras.loe-watcher-v2.plist
-```
-
----
-
-### Notes
-
-- The service runs under the **current user session**
-- Logs are written to the `logs/` directory
-- Configuration should be provided via environment variables (`.env`)
-- After changing code or config, reload the service
-
-
----
-
-## State & persistence
-
-The app uses local files to remember previous status and sent alerts:
-
-- state.txt
-- sent_alerts.json
-
-These files are:
-- created automatically
-- ignored by Git (.gitignore)
-- safe to delete if you want a fresh start
-
----
-
-## Deployment notes
-
-This project can be run as:
-- a local background script
-- a cron job
-- an Azure Function or container (with small adjustments)
-
-Secrets should always be injected via environment variables.
 
 ---
 
 ## Disclaimer
 
-This project depends on the public LOE website structure.
-If the site changes, scraping logic may need updates.
+This project depends on the public LOE API (`api.loe.lviv.ua`).
+If its format changes, `scraper.py` may need updates.
 
 ---
 

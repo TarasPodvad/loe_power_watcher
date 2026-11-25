@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "BOT_TOKEN": "",
+    "CHAT_IDS": "123456789,234567890",
+    "GROUP_NAME": "Група 5.1."
+  }
+}

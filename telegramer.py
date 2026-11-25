@@ -1,29 +1,35 @@
 import requests
-from datetime import datetime
-from config import BOT_TOKEN, CHAT_IDS
+
+from config import BOT_TOKEN, CHAT_IDS, DRY_RUN, now
+
+API = "https://api.telegram.org/bot{token}/{method}"
+
 
 def send_telegram(msg=None, photo_path=None):
-    
+    stamp = now().strftime("%Y-%m-%d %H:%M:%S")
+    if DRY_RUN:
+        print(f"{stamp} [DRY RUN] would send{' photo' if photo_path else ''}:", msg)
+        return
 
-    try:
-        if photo_path:
-            url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto"
-            for chat_id in CHAT_IDS:
+    for chat_id in CHAT_IDS:
+        try:
+            if photo_path:
                 with open(photo_path, "rb") as img:
-                    requests.post(
-                        url,
+                    r = requests.post(
+                        API.format(token=BOT_TOKEN, method="sendPhoto"),
                         data={"chat_id": chat_id, "caption": msg or ""},
                         files={"photo": img},
-                        timeout=15
+                        timeout=15,
                     )
-        else:
-            url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-            for chat_id in CHAT_IDS:
-                requests.post(
-                    url,
+            else:
+                r = requests.post(
+                    API.format(token=BOT_TOKEN, method="sendMessage"),
                     data={"chat_id": chat_id, "text": msg or ""},
-                    timeout=15
+                    timeout=15,
                 )
-        print(f"{datetime.now().strftime("%Y-%m-%d %H:%M:%S")}:         ", msg)
-    except requests.exceptions.RequestException as e:
-        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"), "Telegram error:", e)
+            if not r.ok:
+                print(stamp, f"Telegram error for {chat_id}: {r.status_code} {r.text[:200]}")
+        except requests.exceptions.RequestException as e:
+            print(stamp, f"Telegram error for {chat_id}:", e)
+
+    print(f"{stamp}:         ", msg)
