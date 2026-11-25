@@ -16,8 +16,12 @@ DRY_RUN = os.getenv("DRY_RUN") == "1"  # print instead of sending to Telegram
 TZ = ZoneInfo("Europe/Kyiv")
 
 BASE_DIR = Path(__file__).parent
-# app folder is read-only in Azure -> use temp dir there (state itself lives in Blob)
-DATA_DIR = Path(tempfile.gettempdir()) / "loe" if os.getenv("WEBSITE_INSTANCE_ID") else BASE_DIR / "data"
+# Azure (incl. Flex Consumption) is detected by its site name; app folder is read-only there
+IN_AZURE = bool(os.getenv("WEBSITE_SITE_NAME") or os.getenv("WEBSITE_INSTANCE_ID"))
+# scratch files (chart png) go to temp whenever the app folder isn't writable; state lives in Blob
+DATA_DIR = BASE_DIR / "data"
+if IN_AZURE or not os.access(BASE_DIR, os.W_OK):
+    DATA_DIR = Path(tempfile.gettempdir()) / "loe"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 PLOT_FILE = DATA_DIR / "schedule.png"
 

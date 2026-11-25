@@ -1,12 +1,12 @@
 """Tiny key/value state: Azure Blob when running in Azure, local files otherwise."""
 import os
 
-from config import DATA_DIR
+from config import DATA_DIR, IN_AZURE
 
 CONTAINER = "loe-state"
 _conn = os.getenv("AzureWebJobsStorage", "")
 _USE_BLOB = _conn.startswith("DefaultEndpointsProtocol") or "AccountName=" in _conn
-if os.getenv("WEBSITE_INSTANCE_ID") and not _USE_BLOB:
+if IN_AZURE and not _USE_BLOB:
     # in Azure, temp-file state would silently reset -> refuse to run
     raise RuntimeError("AzureWebJobsStorage must be a connection string in Azure")
 
