@@ -45,7 +45,7 @@ State lives in Blob container `loe-state` (`schedule.txt`, `version.txt`).
 ## Requirements
 
 - Azure subscription
-- Azure CLI (`az`) and Azure Functions Core Tools (`func`)
+- Azure CLI (`az`)
 
 ## Configuration
 
@@ -65,8 +65,8 @@ Times are always Europe/Kyiv.
 ```bash
 az login
 export BOT_TOKEN=... CHAT_IDS=123,456
-./deploy.sh                            # one-time: RG, storage, Flex Consumption app, deploy
-func azure functionapp publish <APP>   # later code updates
+az account set --subscription "<name or id>"
+./deploy.sh    # creates what's missing, updates settings, deploys committed code; re-run for updates
 ```
 
 ---
