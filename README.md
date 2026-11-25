@@ -71,6 +71,17 @@ az account set --subscription "<name or id>"
 
 ---
 
+## Costs, stop, delete
+
+- **Cost:** ~€0/month. ~8,700 runs/month fits the Flex Consumption free grant
+  (250,000 executions + 100,000 GB-s per subscription); storage and App Insights are cents.
+- **Pause:** portal → Function App `loe-watcher-taras` → Overview → **Stop** (Start to resume).
+- **Delete:** portal → resource group `rg-loe-watcher` → **Delete resource group**
+  (or `az group delete -n rg-loe-watcher`). Also check `DefaultResourceGroup-*` for an
+  auto-created Log Analytics workspace and delete it if nothing else uses it.
+
+---
+
 ## Disclaimer
 
 This project depends on the public LOE API (`api.loe.lviv.ua`).
