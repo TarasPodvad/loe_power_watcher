@@ -20,7 +20,7 @@ Runs in Azure Functions and notifies only when your group's schedule changes.
 
 | Function | Trigger | Does |
 |---|---|---|
-| `check_schedule` | timer, every 5 min | fetch API → diff vs last state (Blob) → notify → queue alerts |
+| `check_schedule` | timer, every 10 min | fetch API → diff vs last state (Blob) → notify → queue alerts |
 | `send_alert` | Storage Queue `loe-alerts` | fires at alert time, skips if schedule changed since |
 
 State lives in Blob container `loe-state` (`schedule.txt`, `version.txt`).
@@ -73,7 +73,7 @@ az account set --subscription "<name or id>"
 
 ## Costs, stop, delete
 
-- **Cost:** ~€0/month. ~8,700 runs/month fits the Flex Consumption free grant
+- **Cost:** ~€0/month. ~4,400 runs/month fits the Flex Consumption free grant
   (250,000 executions + 100,000 GB-s per subscription); storage and App Insights are cents.
 - **Pause:** portal → Function App `loe-watcher-taras` → Overview → **Stop** (Start to resume).
 - **Delete:** portal → resource group `rg-loe-watcher` → **Delete resource group**

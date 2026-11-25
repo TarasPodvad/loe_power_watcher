@@ -35,7 +35,7 @@ def _enqueue(send_at, version, event_id, text):
     _queue().send_message(json.dumps(body, ensure_ascii=False), visibility_timeout=delay, time_to_live=delay + 3600)
 
 
-@app.timer_trigger(schedule="0 */5 * * * *", arg_name="timer", run_on_startup=False)
+@app.timer_trigger(schedule="0 */10 * * * *", arg_name="timer", run_on_startup=False)
 def check_schedule(timer: func.TimerRequest) -> None:
     logging.info("check_schedule: %s", watcher.check(_enqueue))
 
