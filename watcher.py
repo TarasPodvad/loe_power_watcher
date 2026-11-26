@@ -31,7 +31,7 @@ def check(enqueue) -> str:
 
     caption = f"{GROUP_NAME.rstrip('.')} — зміни в графіку:\n{diff}"
     if schedule:
-        generate_plot([l for _, l in schedule], [f"{d:%d-%m-%Y}" for d, _ in schedule])
+        generate_plot(schedule)
         send_telegram(caption, PLOT_FILE)
     else:
         send_telegram(caption)
