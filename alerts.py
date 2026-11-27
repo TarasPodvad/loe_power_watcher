@@ -82,3 +82,36 @@ def describe_change(old_text: str, new_text: str) -> str:
         else:
             out.append(f"🔄 {d}: {short(o)} → {short(n)}")
     return "\n".join(out)
+
+
+WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Нд"]
+
+
+def _hm(m: int) -> str:
+    return f"{m // 60:02d}:{m % 60:02d}"
+
+
+def format_caption(old_text: str, new_text: str) -> str:
+    """Short, preview-friendly caption: one line per upcoming day, times first.
+
+    e.g. '🔴 Пт 27.11: 10:00–13:30, 20:00–23:30 · змінено'
+    """
+    today = kyiv_now().date()
+
+    def by_date(t):
+        rows = dict(l.split(": ", 1) for l in (t or "").splitlines() if ": " in l)
+        return {datetime.strptime(d, "%d.%m.%Y").date(): v for d, v in rows.items()
+                if datetime.strptime(d, "%d.%m.%Y").date() >= today}
+
+    old, new = by_date(old_text), by_date(new_text)
+    lines = []
+    for d in sorted(set(old) | set(new)):
+        label = f"{WEEKDAYS[d.weekday()]} {d:%d.%m}"
+        if d not in new:
+            lines.append(f"⚪️ {label}: графік знято")
+            continue
+        ranges = parse_ranges(new[d])
+        body = ", ".join(f"{_hm(a)}–{_hm(b)}" for a, b in ranges) if ranges else "світло весь день"
+        mark = "" if old.get(d) == new[d] else (" · новий" if d not in old else " · змінено")
+        lines.append(f"{'🔴' if ranges else '🟢'} {label}: {body}{mark}")
+    return "\n".join(lines)

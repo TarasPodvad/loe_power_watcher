@@ -1,8 +1,8 @@
 """Core logic, shared by the Azure Function and the local runner."""
 import hashlib
 
-from alerts import describe_change, plan_alerts
-from config import GROUP_NAME, PLOT_FILE
+from alerts import describe_change, format_caption, plan_alerts
+from config import PLOT_FILE
 from plotter import generate_plot
 from scraper import fetch_schedule
 from storage import get_text, put_text
@@ -29,7 +29,7 @@ def check(enqueue) -> str:
     version = hashlib.sha256(new_text.encode()).hexdigest()[:12]
     put_text("version.txt", version)
 
-    caption = f"{GROUP_NAME.rstrip('.')} — зміни в графіку:\n{diff}"
+    caption = format_caption(old_text, new_text)
     if schedule:
         generate_plot(schedule)
         send_telegram(caption, PLOT_FILE)
